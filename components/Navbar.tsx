@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { HeartHandshake } from "lucide-react";
+import { HeartHandshake, Search, ClipboardList } from "lucide-react";
 import { createClient } from "@/utils/supabase/server";
 import LoginButton from "@/components/LoginButton";
 import LogoutButton from "@/components/LogoutButton";
@@ -28,7 +28,8 @@ function getRoleBadgeClass(role: string) {
 /**
  * คอมโพเนนต์แถบเมนูด้านบน (Server Component)
  * ตรวจสอบสถานะการเข้าสู่ระบบจาก Server ผ่าน Cookies
- * แสดงข้อมูลโปรไฟล์, สิทธิ์ (Role) และเมนูที่สอดคล้องกับผู้ใช้แต่ละกลุ่ม
+ * แสดงลิงก์นำทาง: หน้าแรก, ค้นหาผู้ช่วย (/companions), รายการคำขอของฉัน (/my-requests)
+ * และแสดงข้อมูลโปรไฟล์, สิทธิ์ (Role)
  */
 export default async function Navbar() {
   // สร้าง Supabase Client ฝั่ง Server เพื่ออ่านข้อมูลคุกกี้ Session
@@ -70,27 +71,68 @@ export default async function Navbar() {
   return (
     <header className="sticky top-0 z-40 border-b border-stone-200 bg-white/95 backdrop-blur">
       <nav className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-4 py-3">
-        {/* โลโก้และชื่อระบบ นำทางกลับหน้าแรก */}
-        <Link
-          href="/"
-          className="flex items-center gap-2 text-stone-800 no-underline transition hover:opacity-90"
-        >
-          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-teal-600 text-white shadow-sm">
-            <HeartHandshake className="h-5 w-5" aria-hidden="true" />
-          </span>
-          <span className="text-lg font-semibold tracking-tight text-stone-900">
-            Care Companion
-          </span>
-        </Link>
+        {/* ฝั่งซ้าย: โลโก้และชื่อระบบ */}
+        <div className="flex items-center gap-6">
+          <Link
+            href="/"
+            className="flex items-center gap-2 text-stone-800 no-underline transition hover:opacity-90"
+          >
+            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-teal-600 text-white shadow-sm">
+              <HeartHandshake className="h-5 w-5" aria-hidden="true" />
+            </span>
+            <span className="text-lg font-bold tracking-tight text-stone-900">
+              Care Companion
+            </span>
+          </Link>
+
+          {/* ลิงก์นำทางหลัก (แสดงบนหน้าจอขนาดกลางขึ้นไป) */}
+          <div className="hidden items-center gap-1 md:flex">
+            <Link
+              href="/"
+              className="rounded-lg px-3 py-1.5 text-sm font-medium text-stone-600 transition hover:bg-stone-100 hover:text-teal-700"
+            >
+              หน้าแรก
+            </Link>
+            <Link
+              href="/companions"
+              className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-stone-600 transition hover:bg-stone-100 hover:text-teal-700"
+            >
+              <Search className="h-4 w-4" aria-hidden="true" />
+              <span>ค้นหาผู้ช่วย</span>
+            </Link>
+            {user && (
+              <Link
+                href="/my-requests"
+                className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-stone-600 transition hover:bg-stone-100 hover:text-teal-700"
+              >
+                <ClipboardList className="h-4 w-4" aria-hidden="true" />
+                <span>รายการคำขอของฉัน</span>
+              </Link>
+            )}
+          </div>
+        </div>
 
         {/* ส่วนควบคุมและเมนูด้านขวา */}
         <div className="flex items-center gap-3">
+          {/* ลิงก์ค้นหาผู้ช่วย (แสดงบนหน้าจอเล็ก) */}
           <Link
-            href="/"
-            className="hidden text-sm font-medium text-stone-600 transition hover:text-teal-700 sm:inline"
+            href="/companions"
+            className="inline-flex items-center gap-1 text-xs font-medium text-stone-600 hover:text-teal-700 md:hidden"
           >
-            หน้าแรก
+            <Search className="h-3.5 w-3.5" aria-hidden="true" />
+            <span>หาผู้ช่วย</span>
           </Link>
+
+          {/* ลิงก์คำขอของฉัน (แสดงบนหน้าจอเล็กเมื่อล็อกอิน) */}
+          {user && (
+            <Link
+              href="/my-requests"
+              className="inline-flex items-center gap-1 text-xs font-medium text-stone-600 hover:text-teal-700 md:hidden"
+            >
+              <ClipboardList className="h-3.5 w-3.5" aria-hidden="true" />
+              <span>คำขอของฉัน</span>
+            </Link>
+          )}
 
           {/* ตรวจสอบสถานะการเข้าสู่ระบบ */}
           {!user ? (

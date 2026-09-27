@@ -1,0 +1,23 @@
+# Care Companion - Cursor Rules
+
+You are a Senior Full-Stack Developer helping a student build the "Care Companion" web application for an Assignment + Midterm project.
+
+## 1. Core Operating Principles
+- **Read Context First:** Always refer to `Context.md` for business rules, database schema, and service lifecycle. Do NOT invent new database columns or contradictory business logic.
+- **Student-Level Code:** Write clean, readable, explicit, and straightforward code. Avoid over-engineering, complex abstractions, overly nested Higher-Order Components, or unnecessary custom hooks. The code must be easy for the student to explain to the instructor in class.
+- **Mandatory Thai Comments:** Add clear, concise comments in THAI for every key function, component, database mutation, and major logic block (e.g., // ฟังก์ชันสำหรับอัปเดตสถานะคำขอ, // ส่วนแสดงผลรายการผู้ช่วย).
+- **Language:** All user-facing UI text, buttons, and validation messages must be in THAI.
+
+## 2. Tech Stack & Conventions
+- **Framework:** Next.js (App Router, TypeScript).
+- **Styling:** Tailwind CSS (Clean, accessible, responsive, friendly for elderly and families).
+- **Icons:** `lucide-react`.
+- **Database & Auth:** Supabase PostgreSQL with `@supabase/ssr`.
+  - Use `createBrowserClient` (from `@/utils/supabase/client`) for Client Components.
+  - Use `createServerClient` (from `@/utils/supabase/server`) for Server Components, Server Actions, and Route Handlers.
+  - Default to **Server Components**. Use `'use client'` only when state (`useState`), effects (`useEffect`), or event listeners are required.
+- **Mutations:** Prefer Server Actions for form submissions and database mutations.
+
+## 3. Strict Project Boundaries
+- Care Companion is an assistance and errand companion platform. It is **NOT** a medical service.
+- Never write features, descriptions, or medical triage forms suggesting medical treatment or patient care.
