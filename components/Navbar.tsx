@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { HeartHandshake, Search, ClipboardList } from "lucide-react";
+import { HeartHandshake, Search, ClipboardList, Shield } from "lucide-react";
 import { createClient } from "@/utils/supabase/server";
 import LoginButton from "@/components/LoginButton";
 import LogoutButton from "@/components/LogoutButton";
@@ -29,6 +29,7 @@ function getRoleBadgeClass(role: string) {
  * คอมโพเนนต์แถบเมนูด้านบน (Server Component)
  * ตรวจสอบสถานะการเข้าสู่ระบบจาก Server ผ่าน Cookies
  * แสดงลิงก์นำทาง: หน้าแรก, ค้นหาผู้ช่วย (/companions), รายการคำขอของฉัน (/my-requests)
+ * สำหรับ Admin: แสดงลิงก์ไปยังแผงผู้ดูแลระบบ (/admin)
  * และแสดงข้อมูลโปรไฟล์, สิทธิ์ (Role)
  */
 export default async function Navbar() {
@@ -109,6 +110,16 @@ export default async function Navbar() {
                 <span>รายการคำขอของฉัน</span>
               </Link>
             )}
+            {/* หากผู้ใช้เป็นแอดมิน แสดงลิงก์ไปยังแผงผู้ดูแลระบบ */}
+            {user && role === "admin" && (
+              <Link
+                href="/admin"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-1.5 text-sm font-semibold text-amber-900 border border-amber-200 transition hover:bg-amber-100"
+              >
+                <Shield className="h-4 w-4 text-amber-700" aria-hidden="true" />
+                <span>แผงผู้ดูแลระบบ</span>
+              </Link>
+            )}
           </div>
         </div>
 
@@ -131,6 +142,17 @@ export default async function Navbar() {
             >
               <ClipboardList className="h-3.5 w-3.5" aria-hidden="true" />
               <span>คำขอของฉัน</span>
+            </Link>
+          )}
+
+          {/* ลิงก์แผงผู้ดูแลระบบ (แสดงบนหน้าจอเล็กเมื่อเป็น admin) */}
+          {user && role === "admin" && (
+            <Link
+              href="/admin"
+              className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-900 border border-amber-200 md:hidden"
+            >
+              <Shield className="h-3.5 w-3.5 text-amber-700" aria-hidden="true" />
+              <span>แผงผู้ดูแล</span>
             </Link>
           )}
 

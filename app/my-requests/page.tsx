@@ -6,7 +6,6 @@ import {
   MapPin,
   CheckCircle2,
   AlertCircle,
-  ArrowRight,
   Phone,
   PlusCircle,
   Navigation,

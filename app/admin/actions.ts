@@ -1,0 +1,118 @@
+"use server";
+
+import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
+import { createClient } from "@/utils/supabase/server";
+
+// กำหนดรายการ Role ที่ระบบรองรับ
+type AllowedRole = "customer" | "companion" | "admin";
+
+/**
+ * ฟังก์ชันช่วยดึงค่าข้อความจาก FormData และตัดช่องว่างหน้าหลัง
+ */
+function getTextField(formData: FormData, key: string): string {
+  const value = formData.get(key);
+  return typeof value === "string" ? value.trim() : "";
+}
+
+/**
+ * Server Action: เปลี่ยนสิทธิ์ (Role) ของผู้ใช้งานในระบบ (สำหรับ Admin)
+ * 1. ตรวจสอบว่าผู้ใช้ที่เรียก Action ล็อกอินอยู่หรือไม่
+ * 2. ตรวจสอบว่าผู้ใช้ปัจจุบันมี role === 'admin' ในตาราง public.profiles หรือไม่
+ * 3. ตรวจสอบค่า target_user_id และ new_role ที่ส่งมา
+ * 4. ป้องกันไม่ให้แอดมินลดสิทธิ์ตนเองจนไม่เหลือผู้ดูแลระบบ
+ * 5. หากเปลี่ยนเป็น companion และยังไม่มีข้อมูลใน companion_profiles ให้สร้างข้อมูลเริ่มต้น
+ * 6. อัปเดตฟิลด์ role ในตาราง public.profiles
+ * 7. รีเฟรช Cache และส่งกลับหน้า admin พร้อมข้อความแจ้งเตือนความสำเร็จ
+ */
+export async function updateUserRole(formData: FormData) {
+  // สร้าง Supabase Client ฝั่ง Server
+  const supabase = await createClient();
+
+  // ตรวจสอบข้อมูลผู้ใช้ปัจจุบันที่ส่งคำขอ
+  const {
+    data: { user: currentUser },
+  } = await supabase.auth.getUser();
+
+  // หากไม่ได้ล็อกอิน ให้ส่งกลับหน้าแรก
+  if (!currentUser) {
+    redirect("/");
+  }
+
+  // ตรวจสอบสิทธิ์ว่าผู้ใช้ปัจจุบันเป็น 'admin' หรือไม่
+  const { data: adminProfile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", currentUser.id)
+    .maybeSingle();
+
+  if (adminProfile?.role !== "admin") {
+    console.error("ผู้ใช้ไม่มีสิทธิ์ admin ในการเปลี่ยน Role");
+    redirect("/");
+  }
+
+  // ดึงค่าไอดีผู้ใช้เป้าหมายและสิทธิ์ใหม่ที่ต้องการเปลี่ยน
+  const targetUserId = getTextField(formData, "user_id");
+  const newRole = getTextField(formData, "new_role") as AllowedRole;
+
+  // ตรวจสอบความถูกต้องของสิทธิ์ใหม่
+  const validRoles: AllowedRole[] = ["customer", "companion", "admin"];
+  if (!targetUserId || !validRoles.includes(newRole)) {
+    redirect("/admin?error=invalid_role");
+  }
+
+  // ป้องกันไม่ให้ผู้ดูแลระบบลดสิทธิ์ของตนเอง เพื่อป้องกันไม่ให้ระบบไม่มีแอดมินดูแล
+  if (targetUserId === currentUser.id && newRole !== "admin") {
+    redirect("/admin?error=self_demote");
+  }
+
+  // หากเปลี่ยนสิทธิ์เป็น 'companion' ให้ตรวจสอบว่ามีแถวในตาราง companion_profiles แล้วหรือยัง
+  // หากยังไม่มี ให้สร้างแถวเริ่มต้นไว้ เพื่อให้แสดงผลในหน้าค้นหาผู้ช่วยได้ถูกต้อง
+  if (newRole === "companion") {
+    const { data: existingCompanion } = await supabase
+      .from("companion_profiles")
+      .select("id")
+      .eq("id", targetUserId)
+      .maybeSingle();
+
+    if (!existingCompanion) {
+      const { error: insertCompanionError } = await supabase
+        .from("companion_profiles")
+        .insert({
+          id: targetUserId,
+          bio: "ผู้ช่วยร่วมเดินทาง (ปรับสถานะโดยผู้ดูแลระบบ)",
+          skills: "ช่วยเหลือการเดินทางทั่วไป, อำนวยความสะดวก",
+          service_areas: "กรุงเทพฯ และปริมณฑล",
+          available_days: "จันทร์ - อาทิตย์",
+          is_available: true,
+        });
+
+      if (insertCompanionError) {
+        console.error(
+          "เกิดข้อผิดพลาดในการสร้างแถวเริ่มต้น companion_profiles:",
+          insertCompanionError.message,
+        );
+      }
+    }
+  }
+
+  // อัปเดตสิทธิ์ (role) ของผู้ใช้เป้าหมายในตาราง public.profiles
+  const { error: updateError } = await supabase
+    .from("profiles")
+    .update({ role: newRole })
+    .eq("id", targetUserId);
+
+  if (updateError) {
+    console.error("เกิดข้อผิดพลาดในการอัปเดตสิทธิ์ผู้ใช้:", updateError.message);
+    redirect("/admin?error=update_failed");
+  }
+
+  // สั่ง Revalidate เพื่อเคลียร์ Cache ให้ทุกหน้าเห็น Role ใหม่ทันที
+  revalidatePath("/admin");
+  revalidatePath("/companions");
+  revalidatePath("/my-requests");
+  revalidatePath("/", "layout");
+
+  // ส่งกลับไปยังหน้า admin พร้อมสถานะสำเร็จ
+  redirect("/admin?success=role_updated");
+}
