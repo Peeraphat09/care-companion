@@ -1,36 +1,55 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 🤝 Care Companion
 
-## Getting Started
+> **เว็บแอปพลิเคชันแพลตฟอร์มกลางเชื่อมโยงผู้ช่วยร่วมเดินทางกับผู้ต้องการความช่วยเหลือ**
+> รายวิชา: Assignment + Midterm พัฒนา Web Application by Next.js[cite: 1]
 
-First, run the development server:
+---
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## 📖 ที่มาและแนวคิดโครงการ (Background & Problem Statement)
+ในปัจจุบัน ผู้สูงอายุ หรือผู้ที่เดินทางคนเดียวไม่สะดวก มักพบอุปสรรคเมื่อจำเป็นต้องเดินทางไปทำธุระสำคัญนอกบ้านในวันที่คนในครอบครัวติดภารกิจ เช่น การไปโรงพยาบาลตามนัดหมายแพทย์ การติดต่อธนาคาร หรือการติดต่อหน่วยงานราชการ
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+**Care Companion** ถูกพัฒนาขึ้นเพื่อแก้ปัญหาดังกล่าว โดยทำหน้าที่เป็นตัวกลางในการเชื่อมต่อระหว่าง:
+1. **Customer:** ผู้ที่ต้องการผู้ช่วยร่วมเดินทางไปทำธุระ
+2. **Companion:** ผู้ให้บริการช่วยเหลือและอำนวยความสะดวกในการเดินทาง
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+> ⚠️ **ข้อจำกัดสำคัญ:** Companion มีหน้าที่ช่วยเหลือและอำนวยความสะดวกในการเดินทางและการทำธุระเท่านั้น **ไม่ใช่ผู้ให้บริการทางการแพทย์หรือผู้ดูแลรักษาผู้ป่วย**
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+---
 
-## Learn More
+## ✨ ฟีเจอร์หลักของระบบ (Key Features)
 
-To learn more about Next.js, take a look at the following resources:
+### 1. สำหรับ Customer (ผู้ใช้บริการ)
+- เข้าสู่ระบบด้วย Google Account อย่างปลอดภัย
+- ค้นหาและดูโปรไฟล์ Companion (ทักษะ, พื้นที่ให้บริการ, เวลาที่สะดวก)
+- สร้างคำขอบริการ ระบุวัน เวลา สถานที่ต้นทาง-ปลายทาง และประเภทธุระ
+- ติดตามสถานะของคำขอบริการแบบเรียลไทม์
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### 2. สำหรับ Companion (ผู้ช่วยร่วมเดินทาง)
+- เข้าสู่ระบบด้วย Google Account และจัดการข้อมูลโปรไฟล์ของตนเอง
+- เปิด/ปิด สถานะพร้อมรับงาน (Availability Toggle)
+- ตรวจสอบรายการคำขอและกดยืนยันตอบรับงาน (Accept Request)
+- อัปเดตสถานะงานตั้งแต่เริ่มต้นเดินทางจนเสร็จสิ้นบริการ
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### 3. สำหรับ Admin (ผู้ดูแลระบบ)
+- แดชบอร์ดภาพรวมสถิติการใช้งานแพลตฟอร์ม
+- จัดการข้อมูลและกำหนดสิทธิ์ผู้ใช้งาน (Customer / Companion / Admin)
+- ตรวจสอบประวัติและรายการคำขอบริการทั้งหมดในระบบ
 
-## Deploy on Vercel
+---
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## 🛠️ เทคโนโลยีที่ใช้ (Tech Stack)
+- **Frontend / Full Stack:** Next.js (App Router, TypeScript) + Tailwind CSS
+- **Icons:** Lucide React
+- **Authentication:** Google Account ทำงานร่วมกับ Supabase Authentication
+- **Database:** Supabase PostgreSQL (เปิดใช้งาน RLS ทุกตาราง)
+- **File Storage:** Supabase Storage (Bucket: `companion-files`)
+- **Deployment:** Vercel
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+---
+
+## 🚀 การติดตั้งและรันในเครื่อง (Getting Started)
+
+1. **Clone โปรเจกต์:**
+   ```bash
+   git clone <your-repo-url>
+   cd care-companion

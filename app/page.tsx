@@ -1,69 +1,83 @@
-import Image from "next/image";
+import Link from "next/link";
+import { CheckCircle2, MapPin, Users } from "lucide-react";
+import { createClient } from "@/utils/supabase/server";
 
-export default function Home() {
+type HomePageProps = {
+  searchParams: Promise<{ companion?: string }>;
+};
+
+/**
+ * หน้าแรกของระบบ Care Companion
+ */
+export default async function Home({ searchParams }: Readonly<HomePageProps>) {
+  const { companion } = await searchParams;
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  let role = "customer";
+
+  if (user) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .maybeSingle();
+    role = profile?.role ?? "customer";
+  }
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+    <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-12">
+      {/* แจ้งเตือนเมื่อสมัครเป็น Companion สำเร็จ */}
+      {companion === "success" && (
+        <div className="mb-8 flex items-start gap-3 rounded-xl border border-teal-200 bg-teal-50 px-4 py-3 text-teal-900">
+          <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
+          <p className="text-sm leading-6">
+            สมัครเป็นผู้ช่วยร่วมเดินทางเรียบร้อยแล้ว คุณสามารถรับคำขอช่วยเหลือการเดินทางได้ตามข้อมูลที่กรอกไว้
           </p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+      )}
+
+      <section className="max-w-2xl">
+        <p className="text-sm font-medium text-teal-700">แพลตฟอร์มผู้ช่วยร่วมเดินทาง</p>
+        <h1 className="mt-2 text-3xl font-semibold leading-tight text-stone-800 sm:text-4xl">
+          มีเพื่อนเดินทางไปทำธุระ นอกบ้านได้สบายใจขึ้น
+        </h1>
+        <p className="mt-4 text-lg leading-8 text-stone-600">
+          Care Companion เชื่อมผู้ที่ต้องการผู้ช่วยไปโรงพยาบาล ธนาคาร
+          หรือหน่วยงานราชการ กับผู้ช่วยร่วมเดินทางในพื้นที่ใกล้คุณ
+        </p>
+        <p className="mt-3 text-sm text-stone-500">
+          ผู้ช่วยมีหน้าที่ช่วยเหลือการเดินทางและทำธุระเท่านั้น ไม่ใช่บริการทางการแพทย์
+        </p>
+
+        {user && role === "customer" && (
+          <Link
+            href="/become-companion"
+            className="mt-6 inline-flex rounded-full bg-teal-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-teal-700"
           >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+            สมัครเป็นผู้ช่วยร่วมเดินทาง (Become a Companion)
+          </Link>
+        )}
+      </section>
+
+      <section className="mt-12 grid gap-4 sm:grid-cols-2">
+        <article className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
+          <Users className="h-6 w-6 text-teal-700" aria-hidden="true" />
+          <h2 className="mt-3 font-semibold text-stone-800">สำหรับผู้ใช้บริการ</h2>
+          <p className="mt-1 text-sm leading-6 text-stone-600">
+            เข้าสู่ระบบด้วย Google แล้วสร้างคำขอรับบริการเมื่อต้องการผู้ช่วยร่วมเดินทาง
+          </p>
+        </article>
+        <article className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
+          <MapPin className="h-6 w-6 text-teal-700" aria-hidden="true" />
+          <h2 className="mt-3 font-semibold text-stone-800">สำหรับผู้ช่วยร่วมเดินทาง</h2>
+          <p className="mt-1 text-sm leading-6 text-stone-600">
+            ลงทะเบียนโปรไฟล์ ระบุพื้นที่และเวลาที่สะดวก จากนั้นรับงานช่วยเหลือการเดินทาง
+          </p>
+        </article>
+      </section>
+    </main>
   );
 }
