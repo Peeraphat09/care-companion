@@ -15,10 +15,11 @@ function getTextField(formData: FormData, key: string): string {
 /**
  * Server Action: ตอบรับงานบริการ (สำหรับ Companion)
  * 1. ตรวจสอบว่าผู้ใช้ล็อกอินอยู่หรือไม่
- * 2. ตรวจสอบสิทธิ์ว่าผู้ใช้เป็น Companion หรือไม่
- * 3. ตรวจสอบว่าคำขอยัง 'pending', ยังไม่เลยเวลานัด และเป็นคำขอแบบเปิดหรือเจาะจงถึงตนเอง
- * 4. อัปเดต companion_id เป็น id ของผู้ใช้ปัจจุบัน และเปลี่ยน status เป็น 'accepted'
- * 5. รีเฟรช Cache และส่งผู้ใช้กลับหน้ารายการคำขอ
+ * 2. เรียกฟังก์ชัน accept_service_request ใน Supabase (SECURITY DEFINER) ซึ่งตรวจทุกเงื่อนไขและอัปเดตในที่เดียว:
+ *    เป็น Companion, คำขอยัง 'pending', ไม่ใช่ของตนเอง, เป็นคำขอแบบเปิดหรือเจาะจงถึงตนเอง,
+ *    ยังไม่เลยเวลานัด, เวลาไม่ซ้อนกับงานที่รับไว้ (ล็อกแถวกันรับพร้อมกัน)
+ *    ทำผ่านฟังก์ชันเพื่อไม่ต้องเปิดสิทธิ์ UPDATE คำขอของคนอื่นใน RLS
+ * 3. แปลงผลลัพธ์เป็นรหัส error/success แล้วส่งผู้ใช้กลับหน้ารายการคำขอ
  */
 export async function acceptServiceRequest(formData: FormData) {
   // สร้าง Supabase Client สำหรับฝั่ง Server
@@ -33,96 +34,34 @@ export async function acceptServiceRequest(formData: FormData) {
     redirect("/");
   }
 
-  // ตรวจสอบสิทธิ์: ต้องเป็น Companion เท่านั้น (ถ้าอ่าน role ไม่ได้ให้ปฏิเสธไว้ก่อน)
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .maybeSingle();
-
-  if (profile?.role !== "companion") {
-    redirect("/my-requests?error=unauthorized");
-  }
-
   const requestId = getTextField(formData, "request_id");
   if (!requestId) {
     redirect("/my-requests?error=missing_id");
   }
 
-  // ดึงข้อมูลคำขอปัจจุบันเพื่อตรวจสอบสถานะก่อนรับงาน
-  const { data: request, error: fetchError } = await supabase
-    .from("service_requests")
-    .select("id, customer_id, companion_id, status, appointment_date, duration_hours")
-    .eq("id", requestId)
-    .single();
+  // เรียกฟังก์ชันใน DB: คืนข้อความ 'ok' หรือรหัส error
+  const { data: result, error: rpcError } = await supabase.rpc("accept_service_request", {
+    p_request_id: requestId,
+  });
 
-  if (fetchError || !request) {
-    console.error("ไม่พบคำขอรับบริการที่ต้องการรับงาน:", fetchError?.message);
-    redirect("/my-requests?error=not_found");
-  }
-
-  // ป้องกันไม่ให้รับงานของตนเอง
-  if (request.customer_id === user.id) {
-    redirect("/my-requests?error=own_request");
-  }
-
-  // ตรวจสอบว่าคำขอนี้ยังเปิดรอผู้ช่วยอยู่หรือไม่
-  if (request.status !== "pending") {
-    redirect("/my-requests?error=already_taken");
-  }
-
-  // คำขอเจาะจง: ต้องเป็นผู้ช่วยที่ถูกระบุเท่านั้น (กันแย่งงานของคนอื่น)
-  if (request.companion_id && request.companion_id !== user.id) {
-    redirect("/my-requests?error=unauthorized");
-  }
-
-  // คำขอที่เลยเวลานัดแล้วรับไม่ได้
-  const appointmentStart = new Date(request.appointment_date);
-  if (appointmentStart.getTime() < Date.now()) {
-    redirect("/my-requests?error=expired");
-  }
-
-  // ป้องกันการรับงานซ้อนทับกัน (Scheduling Conflicts)
-  const appointmentEnd = new Date(appointmentStart.getTime() + request.duration_hours * 3600000);
-
-  const { data: activeJobs } = await supabase
-    .from("service_requests")
-    .select("appointment_date, duration_hours")
-    .eq("companion_id", user.id)
-    .in("status", ["accepted", "in_progress"]);
-
-  if (activeJobs) {
-    for (const job of activeJobs) {
-      const jobStart = new Date(job.appointment_date);
-      const jobEnd = new Date(jobStart.getTime() + job.duration_hours * 3600000);
-      if (appointmentStart < jobEnd && jobStart < appointmentEnd) {
-        redirect("/my-requests?error=schedule_conflict");
-      }
-    }
-  }
-
-  // อัปเดตคำขอ: บันทึก companion_id และเปลี่ยนสถานะเป็น 'accepted'
-  // เงื่อนไข: ยัง pending และเป็นคำขอแบบเปิดหรือของตนเอง (ป้องกัน Race condition)
-  // .select("id") เพื่อตรวจว่ามีแถวถูกอัปเดตจริงหรือไม่
-  const { data: updatedRows, error: updateError } = await supabase
-    .from("service_requests")
-    .update({
-      companion_id: user.id,
-      status: "accepted",
-    })
-    .eq("id", requestId)
-    .eq("status", "pending")
-    .or(`companion_id.is.null,companion_id.eq.${user.id}`)
-    .select("id");
-
-  if (updateError) {
-    console.error("เกิดข้อผิดพลาดในการตอบรับงาน:", updateError.message);
+  if (rpcError) {
+    console.error("เกิดข้อผิดพลาดในการตอบรับงาน:", rpcError.message);
     redirect("/my-requests?error=update_failed");
   }
 
-  // ไม่มีแถวถูกอัปเดต = มีคนรับไปก่อนแล้ว
-  if (!updatedRows || updatedRows.length === 0) {
-    redirect("/my-requests?error=already_taken");
+  // รหัสที่ฟังก์ชันคืนมาซึ่งหน้า /my-requests มีข้อความรองรับ
+  const knownErrors = [
+    "unauthorized",
+    "not_found",
+    "own_request",
+    "already_taken",
+    "expired",
+    "schedule_conflict",
+  ];
+  if (result !== "ok") {
+    redirect(
+      `/my-requests?error=${knownErrors.includes(String(result)) ? result : "update_failed"}`,
+    );
   }
 
   // อัปเดต Cache เพื่อให้หน้าเว็บดึงข้อมูลใหม่
