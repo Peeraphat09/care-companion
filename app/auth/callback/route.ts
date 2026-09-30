@@ -64,7 +64,8 @@ async function ensureProfileExists(supabase: SupabaseClient, user: User) {
         avatar_url: avatarUrl,
         role: "customer",
       },
-      { onConflict: "id" },
+      // ถ้ามีแถวอยู่แล้วให้ข้าม (ON CONFLICT DO NOTHING) เพราะผู้ใช้ทั่วไปไม่มีสิทธิ์ UPDATE คอลัมน์ role
+      { onConflict: "id", ignoreDuplicates: true },
     );
 
     if (insertError) {
