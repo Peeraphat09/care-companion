@@ -87,6 +87,7 @@ function formatThaiDateTime(dateString: string): string {
     if (isNaN(date.getTime())) return dateString;
     return (
       date.toLocaleDateString("th-TH", {
+        timeZone: "Asia/Bangkok",
         weekday: "short",
         year: "numeric",
         month: "short",
@@ -108,6 +109,7 @@ function formatThaiDate(dateString: string): string {
     const date = new Date(dateString);
     if (isNaN(date.getTime())) return dateString;
     return date.toLocaleDateString("th-TH", {
+      timeZone: "Asia/Bangkok",
       year: "numeric",
       month: "short",
       day: "numeric",
@@ -206,6 +208,9 @@ function getSuccessMessage(success?: string): string | null {
  * ฟังก์ชันแปลงรหัสข้อผิดพลาดเป็นข้อความภาษาไทย
  */
 function getErrorMessage(error?: string): string | null {
+  if (error === "cleanup_failed") {
+    return "เปลี่ยนสิทธิ์แล้ว แต่ปิดรับงานหรือคืนงานของผู้ใช้นี้ไม่สำเร็จ กรุณาตรวจสอบรายการคำขอทั้งหมดและลองใหม่";
+  }
   if (error === "self_demote") {
     return "ไม่สามารถลดสิทธิ์บัญชีผู้ดูแลระบบของตนเองได้ เพื่อความปลอดภัยของระบบ";
   }

@@ -78,7 +78,13 @@ export async function updateUserRole(formData: FormData) {
       .eq("id", targetUserId)
       .maybeSingle();
 
-    if (!existingCompanion) {
+    if (existingCompanion) {
+      // เคยเป็น Companion แล้วถูกลดสิทธิ์ (is_available ถูกปิดไว้) ให้เปิดรับงานอีกครั้งเมื่อกลับมาเป็น companion
+      await supabaseAdmin
+        .from("companion_profiles")
+        .update({ is_available: true })
+        .eq("id", targetUserId);
+    } else {
       const { error: insertCompanionError } = await supabaseAdmin
         .from("companion_profiles")
         .insert({
@@ -110,20 +116,31 @@ export async function updateUserRole(formData: FormData) {
     redirect("/admin?error=update_failed");
   }
 
-  // หากลดสิทธิ์จาก companion เป็นอย่างอื่น: ปิดรับงาน และคืนงานที่ยังไม่เริ่ม (accepted) ให้กลับเป็นคำขอแบบเปิด
-  // (งาน in_progress ไม่แตะ เพื่อไม่ให้ทับงานที่กำลังเดินทางอยู่ — Admin ต้องตามดูเอง)
+  // หากลดสิทธิ์จาก companion เป็นอย่างอื่น: ปิดรับงาน และคืนงานที่ยังไม่เริ่ม (pending เจาะจง / accepted)
+  // ให้กลับเป็นคำขอแบบเปิด (งาน in_progress ไม่แตะ เพื่อไม่ให้ทับงานที่กำลังเดินทางอยู่ — Admin ต้องตามดูเอง)
   let hasInProgress = false;
   if (newRole !== "companion") {
-    await supabaseAdmin
+    const { error: availableError } = await supabaseAdmin
       .from("companion_profiles")
       .update({ is_available: false })
       .eq("id", targetUserId);
 
-    await supabaseAdmin
+    const { error: releaseError } = await supabaseAdmin
       .from("service_requests")
       .update({ companion_id: null, status: "pending" })
       .eq("companion_id", targetUserId)
-      .eq("status", "accepted");
+      .in("status", ["pending", "accepted"]);
+
+    // ถ้าเก็บกวาดไม่สำเร็จ ต้องแจ้ง Admin (role ถูกเปลี่ยนไปแล้ว แต่งานอาจยังค้าง)
+    if (availableError || releaseError) {
+      console.error(
+        "เกิดข้อผิดพลาดตอนเก็บกวาดหลังลดสิทธิ์:",
+        availableError?.message,
+        releaseError?.message,
+      );
+      revalidatePath("/", "layout");
+      redirect("/admin?error=cleanup_failed");
+    }
 
     const { count } = await supabaseAdmin
       .from("service_requests")

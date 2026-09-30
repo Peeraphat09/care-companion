@@ -73,7 +73,9 @@ function formatThaiDateTime(dateString: string): string {
   try {
     const date = new Date(dateString);
     if (isNaN(date.getTime())) return dateString;
+    // ระบุ timeZone เป็นเวลาไทย เพราะ server บน Vercel ใช้ UTC
     return date.toLocaleDateString("th-TH", {
+      timeZone: "Asia/Bangkok",
       weekday: "long",
       year: "numeric",
       month: "long",
@@ -395,6 +397,28 @@ export default async function MyRequestsPage({
             </span>
           </Link>
 
+          {/* แท็บ 3: คำขอเดิมที่สร้างไว้ตอนเป็นลูกค้า (แสดงเฉพาะเมื่อยังมีอยู่ เพื่อให้ติดตาม/ยกเลิกได้) */}
+          {customerRequests.length > 0 && (
+            <Link
+              href="/my-requests?tab=customer_requests"
+              className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition ${
+                activeTab === "customer_requests"
+                  ? "bg-teal-600 text-white shadow-xs"
+                  : "bg-white text-stone-600 border border-stone-200 hover:bg-stone-50"
+              }`}
+            >
+              <span>คำขอเดิมของฉัน</span>
+              <span
+                className={`rounded-full px-2 py-0.5 text-xs font-bold ${
+                  activeTab === "customer_requests"
+                    ? "bg-white/20 text-white"
+                    : "bg-stone-100 text-stone-700"
+                }`}
+              >
+                {customerRequests.length}
+              </span>
+            </Link>
+          )}
         </div>
       )}
 
@@ -722,7 +746,7 @@ export default async function MyRequestsPage({
       {/* ========================================================================= */}
       {/* ส่วนที่ 3: คำขอที่ผู้ใช้สร้างเอง (เฉพาะ Customer — Companion ไม่สร้างคำขอ) */}
       {/* ========================================================================= */}
-      {!isCompanion && (
+      {(!isCompanion || (activeTab === "customer_requests" && customerRequests.length > 0)) && (
         <section className="mt-6">
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-lg font-bold text-stone-900">
