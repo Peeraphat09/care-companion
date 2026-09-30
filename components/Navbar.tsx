@@ -178,7 +178,12 @@ export default async function Navbar() {
               )}
 
               {/* ข้อมูลโปรไฟล์ผู้ใช้: แสดง Avatar, ชื่อ และ Badge ระบุ Role */}
-              <div className="flex items-center gap-2.5">
+              {/* กดที่รูป/ชื่อเพื่อไปหน้าแก้ไขโปรไฟล์ */}
+              <Link
+                href="/profile"
+                aria-label="แก้ไขโปรไฟล์ของฉัน"
+                className="flex items-center gap-2.5 rounded-lg transition hover:opacity-80"
+              >
                 {avatarUrl ? (
                   <Image
                     src={avatarUrl}
@@ -207,7 +212,7 @@ export default async function Navbar() {
                     {getRoleLabel(role)}
                   </span>
                 </div>
-              </div>
+              </Link>
 
               {/* ปุ่มออกจากระบบ */}
               <LogoutButton />

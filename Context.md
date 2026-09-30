@@ -30,13 +30,13 @@
 | R1 | Customer/Companion เข้าชมข้อมูลเบื้องต้นของแพลตฟอร์มและข้อมูลที่เหมาะสมต่อการเผยแพร่ได้ | หน้าแรก `/` และรายชื่อผู้ช่วย `/companions` เข้าดูได้โดยไม่ต้องล็อกอิน (แสดงเฉพาะข้อมูลที่เหมาะสมต่อการเผยแพร่) | ✅ |
 | R2 | Customer ระบุความต้องการ: ประเภทธุระ, วัน-เวลา, ต้นทาง, จุดหมาย, ระยะเวลา, รายละเอียด | ฟอร์ม `/requests/new` | ✅ |
 | R3 | Customer ค้นหาหรือเลือก Companion ที่เหมาะสม | ค้นหาที่ `/companions` แล้วสร้างคำขอแบบ "เจาะจงผู้ช่วย" หรือปล่อยเป็นคำขอแบบเปิด | ✅ |
-| R4 | Companion นำเสนอข้อมูลตนเอง: ประสบการณ์, ความสามารถ, พื้นที่ให้บริการ, ช่วงเวลาที่สะดวก และข้อมูลอื่นที่จำเป็น | `/become-companion` → `companion_profiles` (bio, skills, service_areas, available_days) | ✅ (ยังไม่มีหน้าแก้ไขโปรไฟล์/สวิตช์ `is_available` หลังสมัคร) |
+| R4 | Companion นำเสนอข้อมูลตนเอง: ประสบการณ์, ความสามารถ, พื้นที่ให้บริการ, ช่วงเวลาที่สะดวก และข้อมูลอื่นที่จำเป็น | `/become-companion` → `companion_profiles` (bio, skills, service_areas, available_days) | ✅ (แก้ไขโปรไฟล์และสวิตช์ `is_available` ได้ที่ `/profile`) |
 | R5 | Companion ตอบรับการเป็นผู้ช่วยร่วมเดินทาง | ปุ่มตอบรับใน `/my-requests` | ✅ |
 | R6 | ต้องเข้าสู่ระบบด้วย Google Account ทั้ง Customer และ Companion | Supabase Auth (Google OAuth) + `/auth/callback` | ✅ |
 | R7 | รองรับกระบวนการ ค้นหา/ร้องขอ → ตอบรับ → ให้บริการ → สิ้นสุดบริการ | Service Lifecycle (หัวข้อ 4) | ✅ |
 | R8 | จัดการข้อมูลและสิทธิ์ผู้ใช้แต่ละประเภทอย่างเหมาะสม | Role ใน `profiles.role` + ตรวจใน Server Action + RLS | ⚠️ ดูรายงานใน `review.md` |
 | R9 | Admin บริหารข้อมูลภาพรวมแพลตฟอร์ม และจัดการข้อมูลทั้ง Customer และ Companion | `/admin`: สถิติ, เปลี่ยน Role, ดูคำขอทั้งหมด | ✅ (ยังไม่มีระงับ/ลบผู้ใช้ และแก้ข้อมูล Companion) |
-| R10 | ใช้ Supabase Storage | Bucket `companion-files` เตรียมไว้ แต่ **ยังไม่ได้เชื่อมกับ flow ใดในโค้ด** | ❌ ยังไม่ทำ |
+| R10 | ใช้ Supabase Storage | อัปโหลดรูปโปรไฟล์ไปยัง Bucket `companion-files` (โฟลเดอร์ `<user_id>/`) ที่ `/profile` — ต้องตั้ง Storage policy ตามหัวข้อ 8 | ✅ (หลังตั้ง policy) |
 | R11 | Deploy บน Vercel ใช้งานจริงได้ | ต้องตั้ง Env และ Redirect URL ของ Google OAuth/Supabase ให้ตรงโดเมนจริง | ⏳ ตรวจก่อนส่ง |
 
 > ตารางนี้เป็นภาพรวมเทียบโจทย์ ณ ปัจจุบัน — เมื่อทำรายการใดเสร็จให้อัปเดตสถานะที่นี่
@@ -149,7 +149,9 @@ pending ─(Companion ตอบรับ)→ accepted ─(เริ่มเด�
 ## 8. Storage Buckets
 
 - Bucket: `companion-files` (Public)
-- ตั้งใจใช้เก็บรูปประจำตัวหรือเอกสารประกอบโปรไฟล์ของ Companion **(ยังไม่ได้เชื่อมกับโค้ด — ต้องทำเพื่อให้ตรงโจทย์ข้อ File Storage)**
+- ใช้เก็บรูปโปรไฟล์ของผู้ใช้ทุก role ที่ path `<user_id>/avatar-<timestamp>.<jpg|png|webp>` (ไม่เกิน 2MB) อัปโหลดจาก `/profile`
+- Storage policy ที่ต้องมีบน `storage.objects`: อนุญาต INSERT/DELETE เฉพาะ `bucket_id = 'companion-files'` และโฟลเดอร์แรกของ path เท่ากับ `auth.uid()::text` (Bucket เป็น Public จึงอ่านได้ทุกคน)
+- สิทธิ์คอลัมน์ `profiles`: `GRANT UPDATE (full_name, avatar_url, phone) ON public.profiles TO authenticated;`
 - ข้อควรระวัง: bucket แบบ Public ห้ามเก็บเอกสารยืนยันตัวตนที่เป็นความลับ ถ้าจะเก็บควรใช้ Private bucket + signed URL
 
 ## 9. Deployment (Vercel)

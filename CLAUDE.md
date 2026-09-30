@@ -24,7 +24,7 @@ Next.js is 16.x with React 19: `searchParams` is a `Promise` and must be awaited
 
 `Context.md` is the source of truth for requirements, business rules (§5), security model (§6) and DB schema (§7); it also has a requirement-vs-implementation table (§2.2) — update it when a requirement is finished. `.cursorrules` / `gemini.md` set conventions.
 
-**Business rules to preserve when editing:** Customers create requests, Companions only accept/progress them (Companions must not create requests); public pages (`/`, `/companions`) work without login and must not expose phone numbers; status changes follow `accepted → in_progress → completed` only. Known gaps against the brief: Supabase Storage (`companion-files`) is not wired to any code, and companions cannot edit their profile / toggle `is_available` after registering.
+**Business rules to preserve when editing:** Customers create requests, Companions only accept/progress them (Companions must not create requests); public pages (`/`, `/companions`) work without login and must not expose phone numbers; status changes follow `accepted → in_progress → completed` only. `/profile` (all roles) edits name/phone/avatar (uploaded to Storage bucket `companion-files` under `<user_id>/`) and, for companions, the companion fields + `is_available`; it never touches `role`.
 
 ## Conventions (from `.cursorrules`, `gemini.md`)
 
