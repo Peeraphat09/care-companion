@@ -154,21 +154,20 @@ export async function rejectDirectRequest(formData: FormData) {
     redirect("/my-requests?error=missing_id");
   }
 
-  // เงื่อนไขในคำสั่งเดียว: เป็นคำขอของ Companion คนนี้ และยัง pending เท่านั้น
-  const { data: updatedRows, error: updateError } = await supabase
-    .from("service_requests")
-    .update({ companion_id: null })
-    .eq("id", requestId)
-    .eq("companion_id", user.id)
-    .eq("status", "pending")
-    .select("id");
+  // เรียกฟังก์ชัน reject_direct_request ใน Supabase (SECURITY DEFINER)
+  // เพราะนโยบาย RLS ไม่ให้ Companion ตั้ง companion_id เป็น null ตรง ๆ
+  // ฟังก์ชันนี้แก้ได้เฉพาะคำขอที่ระบุถึงผู้เรียกและยัง pending แล้วคืนจำนวนแถวที่แก้
+  const { data: updatedCount, error: updateError } = await supabase.rpc(
+    "reject_direct_request",
+    { p_request_id: requestId },
+  );
 
   if (updateError) {
     console.error("เกิดข้อผิดพลาดในการปฏิเสธคำขอ:", updateError.message);
     redirect("/my-requests?error=update_failed");
   }
 
-  if (!updatedRows || updatedRows.length === 0) {
+  if (!updatedCount) {
     redirect("/my-requests?error=unauthorized");
   }
 
