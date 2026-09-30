@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import { createClient } from "@/utils/supabase/server";
-import { acceptServiceRequest, updateRequestStatus } from "./actions";
+import { acceptServiceRequest, rejectDirectRequest, updateRequestStatus } from "./actions";
 
 // กำหนด Type ของพารามิเตอร์ URL ในหน้าติดตามคำขอ
 type MyRequestsPageProps = {
@@ -139,6 +139,7 @@ function getSuccessMessage(success?: string) {
   if (success === "in_progress") return "เริ่มการเดินทางเรียบร้อยแล้ว ขอให้เดินทางร่วมกันอย่างราบรื่นและปลอดภัย";
   if (success === "completed") return "สิ้นสุดการให้บริการเรียบร้อยแล้ว ขอบคุณที่ร่วมส่งมอบความช่วยเหลือ";
   if (success === "cancelled") return "ยกเลิกคำขอรับบริการเรียบร้อยแล้ว";
+  if (success === "rejected") return "ปฏิเสธคำขอเรียบร้อยแล้ว คำขอนี้กลับไปเป็นคำขอแบบเปิดให้ผู้ช่วยท่านอื่น";
   return null;
 }
 
@@ -151,6 +152,13 @@ function getErrorMessage(error?: string) {
   if (error === "unauthorized") return "คุณไม่มีสิทธิ์ในการดำเนินการนี้";
   if (error === "update_failed") return "เกิดข้อผิดพลาดในการอัปเดตสถานะ กรุณาลองใหม่อีกครั้ง";
   if (error === "not_found") return "ไม่พบข้อมูลคำขอรับบริการที่ระบุ";
+  if (error === "schedule_conflict") return "ไม่สามารถรับงานได้ เพราะเวลาซ้อนทับกับงานที่คุณรับไว้แล้ว";
+  if (error === "missing_id") return "ไม่พบรหัสคำขอ กรุณาลองใหม่อีกครั้ง";
+  if (error === "invalid_status") return "สถานะที่ต้องการเปลี่ยนไม่ถูกต้อง";
+  if (error === "invalid_transition") return "ไม่สามารถเปลี่ยนสถานะข้ามขั้นหรือย้อนกลับได้";
+  if (error === "cannot_cancel") return "ยกเลิกได้เฉพาะคำขอที่ยังรอตอบรับหรือตอบรับแล้วเท่านั้น";
+  if (error === "expired") return "คำขอนี้เลยเวลานัดหมายแล้ว จึงไม่สามารถรับงานได้";
+  if (error === "customer_only") return "เฉพาะผู้ใช้บริการ (Customer) เท่านั้นที่สร้างคำขอรับบริการได้";
   return null;
 }
 
@@ -188,8 +196,10 @@ export default async function MyRequestsPage({
     .maybeSingle();
 
   const isCompanion = profile?.role === "companion";
+  // เฉพาะ Customer เท่านั้นที่สร้างคำขอได้ (ใช้ควบคุมปุ่มสร้างคำขอ)
+  const isCustomer = profile?.role === "customer";
 
-  // กำหนดแท็บเริ่มต้น: หากเป็น Companion ค่าเริ่มต้นคือ 'open' (งานที่รอผู้ช่วย) หรือ 'my-jobs'
+  // กำหนดแท็บเริ่มต้น: Companion ค่าเริ่มต้นคือ 'open' (งานที่รอผู้ช่วย) ส่วนอื่นไม่มีแท็บ
   const activeTab = tab || (isCompanion ? "open" : "customer_requests");
 
   // 1. ดึงคำขอที่ผู้ใช้สร้างเองในฐานะ Customer
@@ -245,6 +255,7 @@ export default async function MyRequestsPage({
       `)
       .eq("status", "pending")
       .neq("customer_id", user.id)
+      .gt("appointment_date", new Date().toISOString())
       .or(`companion_id.is.null,companion_id.eq.${user.id}`)
       .order("appointment_date", { ascending: true });
 
@@ -302,13 +313,15 @@ export default async function MyRequestsPage({
         </div>
 
         {/* ปุ่มสร้างคำขอใหม่ */}
-        <Link
-          href="/requests/new"
-          className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-teal-600 px-4.5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-teal-700"
-        >
-          <PlusCircle className="h-4 w-4" aria-hidden="true" />
-          <span>สร้างคำขอใหม่</span>
-        </Link>
+        {isCustomer && (
+          <Link
+            href="/requests/new"
+            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-teal-600 px-4.5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-teal-700"
+          >
+            <PlusCircle className="h-4 w-4" aria-hidden="true" />
+            <span>สร้างคำขอใหม่</span>
+          </Link>
+        )}
       </div>
 
       {/* ข้อความย้ำเตือนขอบเขตบริการที่เข้มงวด */}
@@ -382,26 +395,6 @@ export default async function MyRequestsPage({
             </span>
           </Link>
 
-          {/* แท็บ 3: คำขอที่ฉันสร้างเองในฐานะลูกค้า */}
-          <Link
-            href="/my-requests?tab=customer_requests"
-            className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition ${
-              activeTab === "customer_requests"
-                ? "bg-teal-600 text-white shadow-xs"
-                : "bg-white text-stone-600 border border-stone-200 hover:bg-stone-50"
-            }`}
-          >
-            <span>คำขอที่ฉันสร้างเอง</span>
-            <span
-              className={`rounded-full px-2 py-0.5 text-xs font-bold ${
-                activeTab === "customer_requests"
-                  ? "bg-white/20 text-white"
-                  : "bg-stone-100 text-stone-700"
-              }`}
-            >
-              {customerRequests.length}
-            </span>
-          </Link>
         </div>
       )}
 
@@ -537,9 +530,8 @@ export default async function MyRequestsPage({
                         </button>
                       </form>
                       {isDirectRequest && (
-                        <form action={updateRequestStatus} className="w-full">
+                        <form action={rejectDirectRequest} className="w-full">
                           <input type="hidden" name="request_id" value={request.id} />
-                          <input type="hidden" name="status" value="cancelled" />
                           <button
                             type="submit"
                             className="flex w-full items-center justify-center gap-2 rounded-xl border border-red-200 bg-white px-4 py-2.5 text-sm font-semibold text-red-600 shadow-xs transition hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-600"
@@ -728,9 +720,9 @@ export default async function MyRequestsPage({
       )}
 
       {/* ========================================================================= */}
-      {/* ส่วนที่ 3: คำขอที่ผู้ใช้สร้างเอง (สำหรับ Customer หรือ Companion ที่สร้างคำขอ) */}
+      {/* ส่วนที่ 3: คำขอที่ผู้ใช้สร้างเอง (เฉพาะ Customer — Companion ไม่สร้างคำขอ) */}
       {/* ========================================================================= */}
-      {(!isCompanion || activeTab === "customer_requests") && (
+      {!isCompanion && (
         <section className="mt-6">
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-lg font-bold text-stone-900">
@@ -754,12 +746,14 @@ export default async function MyRequestsPage({
                 >
                   ค้นหาผู้ช่วยร่วมเดินทาง
                 </Link>
-                <Link
-                  href="/requests/new"
-                  className="rounded-xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-teal-700"
-                >
-                  สร้างคำขอรับบริการ
-                </Link>
+                {isCustomer && (
+                  <Link
+                    href="/requests/new"
+                    className="rounded-xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-teal-700"
+                  >
+                    สร้างคำขอรับบริการ
+                  </Link>
+                )}
               </div>
             </div>
           ) : (

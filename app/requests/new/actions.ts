@@ -35,10 +35,10 @@ export async function createServiceRequest(formData: FormData) {
     redirect("/");
   }
 
-  // ดึง role ของ user เพื่อป้องกัน Companion สร้างคำขอ (Role Mixing)
-  const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
-  if (profile?.role === "companion") {
-    redirect("/?error=companion_cannot_create_request");
+  // อนุญาตเฉพาะ Customer สร้างคำขอ (ถ้าอ่าน role ไม่ได้ให้ปฏิเสธไว้ก่อน)
+  const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).maybeSingle();
+  if (profile?.role !== "customer") {
+    redirect("/my-requests?error=customer_only");
   }
 
   // ดึงค่าต่าง ๆ จากแบบฟอร์ม
@@ -59,7 +59,12 @@ export async function createServiceRequest(formData: FormData) {
   }
 
   // ตรวจสอบความถูกต้องของวันเวลานัดหมาย
-  const parsedDate = new Date(appointmentDate);
+  // ค่าจาก datetime-local ไม่มี timezone (เช่น 2026-10-01T09:00) จึงกำหนดเป็นเวลาไทย +07:00 ให้ชัดเจน
+  const parsedDate = new Date(
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(appointmentDate)
+      ? `${appointmentDate}:00+07:00`
+      : appointmentDate,
+  );
   if (isNaN(parsedDate.getTime())) {
     const errorUrl = companionId
       ? `/requests/new?companion_id=${companionId}&error=invalid_date`
@@ -75,13 +80,28 @@ export async function createServiceRequest(formData: FormData) {
     redirect(errorUrl);
   }
 
-  // แปลงระยะเวลาเป็นตัวเลขจำนวนเต็มบวก
-  const durationHours = parseInt(durationHoursRaw, 10);
-  if (isNaN(durationHours) || durationHours <= 0) {
+  // ระยะเวลาต้องเป็นจำนวนเต็มระหว่าง 1 - 24 ชั่วโมง (ไม่ปัดทศนิยมเงียบ ๆ)
+  const durationHours = Number(durationHoursRaw);
+  if (!Number.isInteger(durationHours) || durationHours < 1 || durationHours > 24) {
     const errorUrl = companionId
       ? `/requests/new?companion_id=${companionId}&error=invalid_duration`
       : "/requests/new?error=invalid_duration";
     redirect(errorUrl);
+  }
+
+  // คำขอเจาะจง: ผู้ช่วยต้องมีอยู่จริง เป็น Companion เปิดรับงาน และไม่ใช่ตัวผู้ใช้เอง
+  if (companionId) {
+    const { data: target } = await supabase
+      .from("companion_profiles")
+      .select("id, profiles!inner(role)")
+      .eq("id", companionId)
+      .eq("is_available", true)
+      .eq("profiles.role", "companion")
+      .maybeSingle();
+
+    if (!target || companionId === user.id) {
+      redirect("/requests/new?error=invalid_companion");
+    }
   }
 
   // บันทึกข้อมูลคำขอลงในตาราง public.service_requests
@@ -117,5 +137,5 @@ export async function createServiceRequest(formData: FormData) {
   revalidatePath("/", "layout");
 
   // ส่งผู้ใช้ไปยังหน้าติดตามคำขอ พร้อมแจ้งความสำเร็จ
-  redirect("/my-requests?created=success");
+  redirect("/my-requests?success=created");
 }

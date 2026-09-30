@@ -68,8 +68,23 @@ export default async function CompanionsPage({
   // สร้าง Supabase Client สำหรับฝั่ง Server
   const supabase = await createClient();
 
+  // ตรวจผู้ใช้ปัจจุบัน: หน้านี้เปิดสาธารณะ แต่ปุ่มสร้างคำขอแสดงเฉพาะ Customer (หรือผู้ที่ยังไม่ล็อกอิน)
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  let canCreateRequest = true;
+  if (user) {
+    const { data: me } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .maybeSingle();
+    canCreateRequest = me?.role === "customer";
+  }
+
   // ดึงข้อมูลผู้ช่วยร่วมเดินทางพร้อมข้อมูลโปรไฟล์พื้นฐาน
-  const { data: rawCompanions, error } = await supabase
+  // กรองเฉพาะผู้ที่ยังมี role = 'companion' จริง (ถูกลดสิทธิ์แล้วต้องไม่แสดง) และไม่แสดงการ์ดของตนเอง
+  let companionQuery = supabase
     .from("companion_profiles")
     .select(`
       id,
@@ -78,14 +93,19 @@ export default async function CompanionsPage({
       service_areas,
       available_days,
       is_available,
-      profiles (
+      profiles!inner (
         id,
         full_name,
         avatar_url,
         phone
       )
     `)
-    .eq("is_available", true);
+    .eq("is_available", true)
+    .eq("profiles.role", "companion");
+  if (user) {
+    companionQuery = companionQuery.neq("id", user.id);
+  }
+  const { data: rawCompanions, error } = await companionQuery;
 
   if (error) {
     console.error("เกิดข้อผิดพลาดในการดึงข้อมูล companion_profiles:", error.message);
@@ -126,13 +146,15 @@ export default async function CompanionsPage({
         </div>
 
         {/* ปุ่มสร้างคำขอแบบทั่วไป (ไม่ระบุผู้ช่วย) */}
-        <Link
-          href="/requests/new"
-          className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-teal-600 bg-white px-4 py-2.5 text-sm font-semibold text-teal-700 shadow-sm transition hover:bg-teal-50"
-        >
-          <span>สร้างคำขอทั่วไป (ไม่เจาะจง)</span>
-          <ArrowRight className="h-4 w-4" aria-hidden="true" />
-        </Link>
+        {canCreateRequest && (
+          <Link
+            href="/requests/new"
+            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-teal-600 bg-white px-4 py-2.5 text-sm font-semibold text-teal-700 shadow-sm transition hover:bg-teal-50"
+          >
+            <span>สร้างคำขอทั่วไป (ไม่เจาะจง)</span>
+            <ArrowRight className="h-4 w-4" aria-hidden="true" />
+          </Link>
+        )}
       </div>
 
       {/* ข้อความย้ำเตือนขอบเขตบริการที่เข้มงวด (Strict Business Boundary) */}
@@ -245,12 +267,14 @@ export default async function CompanionsPage({
                   ดูผู้ช่วยทั้งหมด
                 </Link>
               )}
-              <Link
-                href="/requests/new"
-                className="rounded-xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-teal-700"
-              >
-                สร้างคำขอทั่วไป
-              </Link>
+              {canCreateRequest && (
+                <Link
+                  href="/requests/new"
+                  className="rounded-xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-teal-700"
+                >
+                  สร้างคำขอทั่วไป
+                </Link>
+              )}
             </div>
           </div>
         ) : (
@@ -344,16 +368,18 @@ export default async function CompanionsPage({
                   </div>
 
                   {/* ปุ่มเลือกผู้ช่วยคนนี้ เพื่อส่งต่อไปยังหน้าสร้างคำขอ */}
-                  <div className="mt-6 pt-4 border-t border-stone-100">
-                    <Link
-                      href={`/requests/new?companion_id=${companion.id}`}
-                      className="flex w-full items-center justify-center gap-2 rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-semibold text-white shadow-xs transition hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-600 focus:ring-offset-2"
-                    >
-                      <UserCheck className="h-4 w-4" aria-hidden="true" />
-                      <span>เลือกผู้ช่วยคนนี้</span>
-                      <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                    </Link>
-                  </div>
+                  {canCreateRequest && (
+                    <div className="mt-6 pt-4 border-t border-stone-100">
+                      <Link
+                        href={`/requests/new?companion_id=${companion.id}`}
+                        className="flex w-full items-center justify-center gap-2 rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-semibold text-white shadow-xs transition hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-600 focus:ring-offset-2"
+                      >
+                        <UserCheck className="h-4 w-4" aria-hidden="true" />
+                        <span>เลือกผู้ช่วยคนนี้</span>
+                        <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                      </Link>
+                    </div>
+                  )}
                 </article>
               );
             })}

@@ -71,8 +71,8 @@ export default async function BecomeCompanionPage({
     .eq("id", user.id)
     .maybeSingle();
 
-  // กรณีที่ 2: หากเป็น Companion อยู่แล้ว ให้ส่งกลับหน้าแรก ไม่ต้องสมัครซ้ำ
-  if (profile?.role === "companion") {
+  // กรณีที่ 2: สมัครได้เฉพาะ customer (Companion สมัครซ้ำไม่ได้ / Admin สมัครแล้วจะเสียสิทธิ์)
+  if (profile?.role !== "customer") {
     redirect("/");
   }
 

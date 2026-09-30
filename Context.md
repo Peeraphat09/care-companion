@@ -108,7 +108,8 @@ pending ─(Companion ตอบรับ)→ accepted ─(เริ่มเด�
 - **Authorization ชั้นแอป:** ทุก Server Action/หน้าที่จำกัดสิทธิ์ อ่าน role จากตาราง `profiles` (ไม่เชื่อค่าจากฟอร์ม/URL)
 - **Authorization ชั้นฐานข้อมูล:** เปิด RLS ทุกตาราง ใช้ `createClient()` (anon key + cookie ผู้ใช้) เป็นค่าเริ่มต้น
 - **Service Role Key** (`createAdminClient`) ใช้เฉพาะงานที่ต้องข้าม RLS โดยตรวจว่าผู้เรียกเป็น admin แล้วเท่านั้น และห้ามหลุดไปฝั่ง client
-- **การเปลี่ยน Role:** ผู้ใช้ทั่วไปต้องไม่สามารถแก้ `profiles.role` ของตนเองได้โดยตรง (ควรทำผ่านเซิร์ฟเวอร์ที่ตรวจเงื่อนไข)
+- **การเปลี่ยน Role:** ผู้ใช้ทั่วไปต้องไม่สามารถแก้ `profiles.role` ของตนเองได้โดยตรง — โค้ดเปลี่ยน role ผ่าน `createAdminClient()` เท่านั้น (`/admin` และ `/become-companion` ซึ่งตั้งได้เฉพาะ `customer → companion`) และต้องรัน SQL ใน Supabase เพื่อปิดช่องฝั่ง DB: `REVOKE UPDATE (role) ON public.profiles FROM authenticated;` (หรือใช้ trigger)
+- **การปฏิเสธคำขอเจาะจง:** Companion ที่ถูกระบุกด "ปฏิเสธ" → `companion_id` กลับเป็น `null` (คำขอกลายเป็นแบบเปิด) ไม่ยกเลิกคำขอของลูกค้า
 - ป้องกัน Open Redirect ใน `/auth/callback` (`next` ต้องเป็น path ภายใน)
 
 ## 7. Database Schema (Supabase PostgreSQL)

@@ -110,6 +110,29 @@ export async function updateUserRole(formData: FormData) {
     redirect("/admin?error=update_failed");
   }
 
+  // หากลดสิทธิ์จาก companion เป็นอย่างอื่น: ปิดรับงาน และคืนงานที่ยังไม่เริ่ม (accepted) ให้กลับเป็นคำขอแบบเปิด
+  // (งาน in_progress ไม่แตะ เพื่อไม่ให้ทับงานที่กำลังเดินทางอยู่ — Admin ต้องตามดูเอง)
+  let hasInProgress = false;
+  if (newRole !== "companion") {
+    await supabaseAdmin
+      .from("companion_profiles")
+      .update({ is_available: false })
+      .eq("id", targetUserId);
+
+    await supabaseAdmin
+      .from("service_requests")
+      .update({ companion_id: null, status: "pending" })
+      .eq("companion_id", targetUserId)
+      .eq("status", "accepted");
+
+    const { count } = await supabaseAdmin
+      .from("service_requests")
+      .select("id", { count: "exact", head: true })
+      .eq("companion_id", targetUserId)
+      .eq("status", "in_progress");
+    hasInProgress = (count ?? 0) > 0;
+  }
+
   // สั่ง Revalidate เพื่อเคลียร์ Cache ให้ทุกหน้าเห็น Role ใหม่ทันที
   revalidatePath("/admin");
   revalidatePath("/companions");
@@ -117,5 +140,5 @@ export async function updateUserRole(formData: FormData) {
   revalidatePath("/", "layout");
 
   // ส่งกลับไปยังหน้า admin พร้อมสถานะสำเร็จ
-  redirect("/admin?success=role_updated");
+  redirect(hasInProgress ? "/admin?success=role_updated_in_progress" : "/admin?success=role_updated");
 }

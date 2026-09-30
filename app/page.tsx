@@ -67,13 +67,16 @@ export default async function Home({ searchParams }: Readonly<HomePageProps>) {
             <span>ค้นหาผู้ช่วยร่วมเดินทาง</span>
           </Link>
 
-          <Link
-            href="/requests/new"
-            className="inline-flex items-center gap-2 rounded-xl border border-stone-300 bg-white px-5 py-3 text-sm font-semibold text-stone-700 shadow-xs transition hover:bg-stone-50 hover:text-stone-900"
-          >
-            <PlusCircle className="h-4 w-4 text-teal-600" aria-hidden="true" />
-            <span>สร้างคำขอรับบริการ</span>
-          </Link>
+          {/* ปุ่มสร้างคำขอ: แสดงเฉพาะ Customer (และผู้ที่ยังไม่ล็อกอิน) — Companion/Admin ไม่สร้างคำขอ */}
+          {role === "customer" && (
+            <Link
+              href="/requests/new"
+              className="inline-flex items-center gap-2 rounded-xl border border-stone-300 bg-white px-5 py-3 text-sm font-semibold text-stone-700 shadow-xs transition hover:bg-stone-50 hover:text-stone-900"
+            >
+              <PlusCircle className="h-4 w-4 text-teal-600" aria-hidden="true" />
+              <span>สร้างคำขอรับบริการ</span>
+            </Link>
+          )}
 
           {user && role === "customer" && (
             <Link
@@ -118,14 +121,18 @@ export default async function Home({ searchParams }: Readonly<HomePageProps>) {
               <span>ดูรายชื่อผู้ช่วย</span>
               <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
             </Link>
-            <span className="text-stone-300">|</span>
-            <Link
-              href="/requests/new"
-              className="inline-flex items-center gap-1 text-xs font-semibold text-teal-700 hover:underline"
-            >
-              <span>สร้างคำขอใหม่</span>
-              <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
-            </Link>
+            {role === "customer" && (
+              <>
+                <span className="text-stone-300">|</span>
+                <Link
+                  href="/requests/new"
+                  className="inline-flex items-center gap-1 text-xs font-semibold text-teal-700 hover:underline"
+                >
+                  <span>สร้างคำขอใหม่</span>
+                  <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+                </Link>
+              </>
+            )}
           </div>
         </article>
 

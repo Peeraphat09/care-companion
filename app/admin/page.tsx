@@ -196,6 +196,9 @@ function getStatusBadge(status: string) {
  */
 function getSuccessMessage(success?: string): string | null {
   if (success === "role_updated") return "อัปเดตสิทธิ์ผู้ใช้งาน (Role) เรียบร้อยแล้ว";
+  if (success === "role_updated_in_progress") {
+    return "อัปเดตสิทธิ์เรียบร้อยแล้ว แต่ผู้ใช้นี้ยังมีงานที่กำลังดำเนินการ (in_progress) อยู่ กรุณาตรวจสอบในรายการคำขอทั้งหมด";
+  }
   return null;
 }
 

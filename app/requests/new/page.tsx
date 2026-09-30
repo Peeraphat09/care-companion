@@ -38,7 +38,10 @@ function getErrorMessage(error?: string, reason?: string) {
     return "ไม่สามารถจองวันและเวลาย้อนหลังได้ กรุณาเลือกเวลาในอนาคต";
   }
   if (error === "invalid_duration") {
-    return "ระยะเวลาโดยประมาณต้องเป็นตัวเลขจำนวนเต็มชั่วโมงที่มากกว่า 0";
+    return "ระยะเวลาโดยประมาณต้องเป็นตัวเลขจำนวนเต็มชั่วโมง ตั้งแต่ 1 ถึง 24 ชั่วโมง";
+  }
+  if (error === "invalid_companion") {
+    return "ผู้ช่วยที่เลือกไม่พร้อมรับงานหรือไม่มีอยู่ในระบบ กรุณาเลือกผู้ช่วยใหม่ หรือสร้างเป็นคำขอแบบเปิด";
   }
   if (error === "save") {
     return `เกิดข้อผิดพลาดในการบันทึกคำขอรับบริการ: ${reason || "กรุณาลองใหม่อีกครั้ง"}`;
@@ -69,6 +72,16 @@ export default async function NewRequestPage({
     redirect("/");
   }
 
+  // อนุญาตเฉพาะ Customer (Companion/Admin ไม่สร้างคำขอ) — ตรวจก่อน render ฟอร์ม
+  const { data: currentProfile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .maybeSingle();
+  if (currentProfile?.role !== "customer") {
+    redirect("/my-requests?error=customer_only");
+  }
+
   // ดึงค่า Query Parameters
   const { companion_id, error, reason } = await searchParams;
   const errorMessage = getErrorMessage(error, reason);
@@ -91,13 +104,17 @@ export default async function NewRequestPage({
         bio,
         service_areas,
         skills,
-        profiles (
+        profiles!inner (
           id,
           full_name,
-          avatar_url
+          avatar_url,
+          role
         )
       `)
       .eq("id", companion_id)
+      .eq("is_available", true)
+      .eq("profiles.role", "companion")
+      .neq("id", user.id)
       .maybeSingle();
 
     if (companionData) {

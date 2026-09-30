@@ -16,7 +16,7 @@ function getTextField(formData: FormData, key: string): string {
  * Server Action: ตอบรับงานบริการ (สำหรับ Companion)
  * 1. ตรวจสอบว่าผู้ใช้ล็อกอินอยู่หรือไม่
  * 2. ตรวจสอบสิทธิ์ว่าผู้ใช้เป็น Companion หรือไม่
- * 3. ตรวจสอบว่าคำขอนั้นยังมีสถานะ 'pending' และยังไม่มีใครรับไปก่อนหน้า
+ * 3. ตรวจสอบว่าคำขอยัง 'pending', ยังไม่เลยเวลานัด และเป็นคำขอแบบเปิดหรือเจาะจงถึงตนเอง
  * 4. อัปเดต companion_id เป็น id ของผู้ใช้ปัจจุบัน และเปลี่ยน status เป็น 'accepted'
  * 5. รีเฟรช Cache และส่งผู้ใช้กลับหน้ารายการคำขอ
  */
@@ -31,6 +31,17 @@ export async function acceptServiceRequest(formData: FormData) {
 
   if (!user) {
     redirect("/");
+  }
+
+  // ตรวจสอบสิทธิ์: ต้องเป็น Companion เท่านั้น (ถ้าอ่าน role ไม่ได้ให้ปฏิเสธไว้ก่อน)
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (profile?.role !== "companion") {
+    redirect("/my-requests?error=unauthorized");
   }
 
   const requestId = getTextField(formData, "request_id");
@@ -60,8 +71,18 @@ export async function acceptServiceRequest(formData: FormData) {
     redirect("/my-requests?error=already_taken");
   }
 
-  // ป้องกันการรับงานซ้อนทับกัน (Scheduling Conflicts)
+  // คำขอเจาะจง: ต้องเป็นผู้ช่วยที่ถูกระบุเท่านั้น (กันแย่งงานของคนอื่น)
+  if (request.companion_id && request.companion_id !== user.id) {
+    redirect("/my-requests?error=unauthorized");
+  }
+
+  // คำขอที่เลยเวลานัดแล้วรับไม่ได้
   const appointmentStart = new Date(request.appointment_date);
+  if (appointmentStart.getTime() < Date.now()) {
+    redirect("/my-requests?error=expired");
+  }
+
+  // ป้องกันการรับงานซ้อนทับกัน (Scheduling Conflicts)
   const appointmentEnd = new Date(appointmentStart.getTime() + request.duration_hours * 3600000);
 
   const { data: activeJobs } = await supabase
@@ -69,7 +90,7 @@ export async function acceptServiceRequest(formData: FormData) {
     .select("appointment_date, duration_hours")
     .eq("companion_id", user.id)
     .in("status", ["accepted", "in_progress"]);
-    
+
   if (activeJobs) {
     for (const job of activeJobs) {
       const jobStart = new Date(job.appointment_date);
@@ -80,19 +101,28 @@ export async function acceptServiceRequest(formData: FormData) {
     }
   }
 
-  // อัปเดตคำขอ: บันทึก companion_id และเปลี่ยนสถานะเป็น 'accepted' พร้อมป้องกัน Race condition
-  const { error: updateError } = await supabase
+  // อัปเดตคำขอ: บันทึก companion_id และเปลี่ยนสถานะเป็น 'accepted'
+  // เงื่อนไข: ยัง pending และเป็นคำขอแบบเปิดหรือของตนเอง (ป้องกัน Race condition)
+  // .select("id") เพื่อตรวจว่ามีแถวถูกอัปเดตจริงหรือไม่
+  const { data: updatedRows, error: updateError } = await supabase
     .from("service_requests")
     .update({
       companion_id: user.id,
       status: "accepted",
     })
     .eq("id", requestId)
-    .eq("status", "pending");
+    .eq("status", "pending")
+    .or(`companion_id.is.null,companion_id.eq.${user.id}`)
+    .select("id");
 
   if (updateError) {
     console.error("เกิดข้อผิดพลาดในการตอบรับงาน:", updateError.message);
     redirect("/my-requests?error=update_failed");
+  }
+
+  // ไม่มีแถวถูกอัปเดต = มีคนรับไปก่อนแล้ว
+  if (!updatedRows || updatedRows.length === 0) {
+    redirect("/my-requests?error=already_taken");
   }
 
   // อัปเดต Cache เพื่อให้หน้าเว็บดึงข้อมูลใหม่
@@ -103,10 +133,56 @@ export async function acceptServiceRequest(formData: FormData) {
 }
 
 /**
- * Server Action: อัปเดตสถานะงาน (In Progress -> Completed หรือ ยกเลิกงาน)
- * - Companion: สามารถเปลี่ยนจาก 'accepted' -> 'in_progress' (เริ่มเดินทาง)
- *   และจาก 'in_progress' -> 'completed' (สิ้นสุดบริการ)
- * - Customer: สามารถกดยกเลิกงานได้หากสถานะยังเป็น 'pending'
+ * Server Action: Companion ปฏิเสธคำขอที่เจาะจงถึงตนเอง
+ * - ทำได้เฉพาะ Companion ที่ถูกระบุ และคำขอยัง 'pending'
+ * - ไม่ยกเลิกคำขอของลูกค้า แต่คืน companion_id เป็น null ให้กลายเป็นคำขอแบบเปิด
+ */
+export async function rejectDirectRequest(formData: FormData) {
+  // สร้าง Supabase Client สำหรับฝั่ง Server
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect("/");
+  }
+
+  const requestId = getTextField(formData, "request_id");
+  if (!requestId) {
+    redirect("/my-requests?error=missing_id");
+  }
+
+  // เงื่อนไขในคำสั่งเดียว: เป็นคำขอของ Companion คนนี้ และยัง pending เท่านั้น
+  const { data: updatedRows, error: updateError } = await supabase
+    .from("service_requests")
+    .update({ companion_id: null })
+    .eq("id", requestId)
+    .eq("companion_id", user.id)
+    .eq("status", "pending")
+    .select("id");
+
+  if (updateError) {
+    console.error("เกิดข้อผิดพลาดในการปฏิเสธคำขอ:", updateError.message);
+    redirect("/my-requests?error=update_failed");
+  }
+
+  if (!updatedRows || updatedRows.length === 0) {
+    redirect("/my-requests?error=unauthorized");
+  }
+
+  revalidatePath("/my-requests");
+  revalidatePath("/", "layout");
+
+  redirect("/my-requests?success=rejected");
+}
+
+/**
+ * Server Action: อัปเดตสถานะงาน
+ * ลำดับที่อนุญาต (ตรวจกับสถานะปัจจุบันเสมอ):
+ * - Companion ที่ได้รับมอบหมาย: accepted -> in_progress -> completed
+ * - Customer เจ้าของคำขอ หรือ Companion ที่รับงาน: pending/accepted -> cancelled
  */
 export async function updateRequestStatus(formData: FormData) {
   // สร้าง Supabase Client สำหรับฝั่ง Server
@@ -142,37 +218,50 @@ export async function updateRequestStatus(formData: FormData) {
     redirect("/my-requests?error=not_found");
   }
 
-  // ตรวจสอบสิทธิ์:
-  // หากเป็น Companion ต้องเป็นผู้ที่ได้รับมอบหมายงานนี้
-  // หากเป็น Customer ต้องเป็นเจ้าของคำขอและอนุญาตให้ยกเลิกเฉพาะตอน pending
   const isAssignedCompanion = request.companion_id === user.id;
   const isCustomer = request.customer_id === user.id;
 
+  // ตรวจสอบสิทธิ์ตามประเภทการเปลี่ยนสถานะ
   if (newStatus === "in_progress" || newStatus === "completed") {
+    // เฉพาะ Companion ที่ได้รับมอบหมายเท่านั้น
     if (!isAssignedCompanion) {
       redirect("/my-requests?error=unauthorized");
     }
-  } else if (newStatus === "cancelled") {
-    if (!isCustomer && !isAssignedCompanion) {
-      redirect("/my-requests?error=unauthorized");
-    }
-    // ลูกค้าสามารถยกเลิกได้เฉพาะตอนที่สถานะยังเป็น pending หรือ accepted เท่านั้น
-    if (request.status !== "pending" && request.status !== "accepted") {
-      redirect("/my-requests?error=cannot_cancel");
-    }
+  } else if (!isCustomer && !isAssignedCompanion) {
+    // ยกเลิกได้เฉพาะเจ้าของคำขอหรือ Companion ที่รับงาน
+    redirect("/my-requests?error=unauthorized");
   }
 
-  // อัปเดตสถานะคำขอรับบริการ พร้อมเช็กสถานะเดิมป้องกัน Race condition
-  const { error: updateError } = await supabase
+  // ตรวจลำดับสถานะ: ห้ามข้ามขั้นหรือย้อนกลับ
+  const allowedFrom: Record<string, string[]> = {
+    in_progress: ["accepted"],
+    completed: ["in_progress"],
+    cancelled: ["pending", "accepted"],
+  };
+  if (!allowedFrom[newStatus].includes(request.status)) {
+    redirect(
+      newStatus === "cancelled"
+        ? "/my-requests?error=cannot_cancel"
+        : "/my-requests?error=invalid_transition",
+    );
+  }
+
+  // อัปเดตสถานะ พร้อมเช็กสถานะเดิมป้องกัน Race condition และตรวจว่ามีแถวถูกอัปเดตจริง
+  const { data: updatedRows, error: updateError } = await supabase
     .from("service_requests")
     .update({
       status: newStatus,
     })
     .eq("id", requestId)
-    .eq("status", request.status);
+    .eq("status", request.status)
+    .select("id");
 
   if (updateError) {
     console.error("เกิดข้อผิดพลาดในการอัปเดตสถานะงาน:", updateError.message);
+    redirect("/my-requests?error=update_failed");
+  }
+
+  if (!updatedRows || updatedRows.length === 0) {
     redirect("/my-requests?error=update_failed");
   }
 

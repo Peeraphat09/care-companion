@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/utils/supabase/server";
+import { createClient, createAdminClient } from "@/utils/supabase/server";
 
 /**
  * ฟังก์ชันช่วยดึงค่าข้อความจาก FormData และตัดช่องว่างหน้าหลัง
@@ -44,11 +44,14 @@ export async function registerAsCompanion(formData: FormData) {
     redirect("/become-companion?error=incomplete");
   }
 
-  // ตรวจสอบก่อนว่ามี Profile แถวนี้อยู่จริงหรือไม่
-  const { data: profile } = await supabase.from("profiles").select("id").eq("id", user.id).single();
+  // ตรวจสอบก่อนว่ามี Profile อยู่จริง และเป็น customer เท่านั้น (กัน admin/companion ถูกเขียนทับ role)
+  const { data: profile } = await supabase.from("profiles").select("id, role").eq("id", user.id).single();
   if (!profile) {
     console.error("ไม่พบโปรไฟล์ผู้ใช้");
     redirect("/become-companion?error=profile_not_found");
+  }
+  if (profile.role !== "customer") {
+    redirect("/");
   }
 
   // บันทึกหรืออัปเดตข้อมูลลงในตาราง companion_profiles
@@ -69,8 +72,9 @@ export async function registerAsCompanion(formData: FormData) {
     redirect("/become-companion?error=save");
   }
 
-  // อัปเดตสิทธิ์ (role) ในตาราง profiles ให้เป็น 'companion'
-  const { error: profileError } = await supabase
+  // อัปเดตสิทธิ์ (role) ให้เป็น 'companion' ผ่าน Admin Client เพราะผู้ใช้ทั่วไปต้องแก้ role ตัวเองไม่ได้
+  // (ตรวจแล้วข้างบนว่าเป็น customer และตั้งได้เฉพาะค่า 'companion' เท่านั้น)
+  const { error: profileError } = await createAdminClient()
     .from("profiles")
     .update({ role: "companion" })
     .eq("id", user.id);
