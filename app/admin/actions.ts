@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/utils/supabase/server";
+import { createClient, createAdminClient } from "@/utils/supabase/server";
 
 // กำหนดรายการ Role ที่ระบบรองรับ
 type AllowedRole = "customer" | "companion" | "admin";
@@ -66,17 +66,20 @@ export async function updateUserRole(formData: FormData) {
     redirect("/admin?error=self_demote");
   }
 
+  // สร้าง Supabase Admin Client สำหรับการบันทึกข้าม RLS
+  const supabaseAdmin = createAdminClient();
+
   // หากเปลี่ยนสิทธิ์เป็น 'companion' ให้ตรวจสอบว่ามีแถวในตาราง companion_profiles แล้วหรือยัง
   // หากยังไม่มี ให้สร้างแถวเริ่มต้นไว้ เพื่อให้แสดงผลในหน้าค้นหาผู้ช่วยได้ถูกต้อง
   if (newRole === "companion") {
-    const { data: existingCompanion } = await supabase
+    const { data: existingCompanion } = await supabaseAdmin
       .from("companion_profiles")
       .select("id")
       .eq("id", targetUserId)
       .maybeSingle();
 
     if (!existingCompanion) {
-      const { error: insertCompanionError } = await supabase
+      const { error: insertCompanionError } = await supabaseAdmin
         .from("companion_profiles")
         .insert({
           id: targetUserId,
@@ -97,7 +100,7 @@ export async function updateUserRole(formData: FormData) {
   }
 
   // อัปเดตสิทธิ์ (role) ของผู้ใช้เป้าหมายในตาราง public.profiles
-  const { error: updateError } = await supabase
+  const { error: updateError } = await supabaseAdmin
     .from("profiles")
     .update({ role: newRole })
     .eq("id", targetUserId);

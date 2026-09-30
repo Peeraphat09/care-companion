@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { HeartHandshake, Search, ClipboardList, Shield } from "lucide-react";
 import { createClient } from "@/utils/supabase/server";
 import LoginButton from "@/components/LoginButton";
@@ -179,13 +180,13 @@ export default async function Navbar() {
               {/* ข้อมูลโปรไฟล์ผู้ใช้: แสดง Avatar, ชื่อ และ Badge ระบุ Role */}
               <div className="flex items-center gap-2.5">
                 {avatarUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
+                  <Image
                     src={avatarUrl}
                     alt={`รูปโปรไฟล์ของ ${fullName}`}
                     className="h-9 w-9 rounded-full border border-stone-200 object-cover shadow-sm"
                     width={36}
                     height={36}
+                    unoptimized={avatarUrl.startsWith('http')}
                   />
                 ) : (
                   <span className="flex h-9 w-9 items-center justify-center rounded-full bg-teal-100 text-sm font-semibold text-teal-800">

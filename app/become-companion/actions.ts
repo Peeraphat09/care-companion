@@ -44,6 +44,13 @@ export async function registerAsCompanion(formData: FormData) {
     redirect("/become-companion?error=incomplete");
   }
 
+  // ตรวจสอบก่อนว่ามี Profile แถวนี้อยู่จริงหรือไม่
+  const { data: profile } = await supabase.from("profiles").select("id").eq("id", user.id).single();
+  if (!profile) {
+    console.error("ไม่พบโปรไฟล์ผู้ใช้");
+    redirect("/become-companion?error=profile_not_found");
+  }
+
   // บันทึกหรืออัปเดตข้อมูลลงในตาราง companion_profiles
   const { error: companionError } = await supabase
     .from("companion_profiles")
@@ -55,7 +62,7 @@ export async function registerAsCompanion(formData: FormData) {
       available_days: availableDays,
       is_available: true,
       updated_at: new Date().toISOString(),
-    });
+    }, { onConflict: "id" });
 
   if (companionError) {
     console.error("เกิดข้อผิดพลาดในการบันทึก companion_profiles:", companionError.message);

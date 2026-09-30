@@ -35,6 +35,12 @@ export async function createServiceRequest(formData: FormData) {
     redirect("/");
   }
 
+  // ดึง role ของ user เพื่อป้องกัน Companion สร้างคำขอ (Role Mixing)
+  const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
+  if (profile?.role === "companion") {
+    redirect("/?error=companion_cannot_create_request");
+  }
+
   // ดึงค่าต่าง ๆ จากแบบฟอร์ม
   const taskType = getTextField(formData, "task_type");
   const origin = getTextField(formData, "origin");
@@ -58,6 +64,14 @@ export async function createServiceRequest(formData: FormData) {
     const errorUrl = companionId
       ? `/requests/new?companion_id=${companionId}&error=invalid_date`
       : "/requests/new?error=invalid_date";
+    redirect(errorUrl);
+  }
+
+  // ป้องกันการจองงานย้อนเวลา (Time Travel Booking)
+  if (parsedDate.getTime() < Date.now()) {
+    const errorUrl = companionId
+      ? `/requests/new?companion_id=${companionId}&error=past_date`
+      : "/requests/new?error=past_date";
     redirect(errorUrl);
   }
 
@@ -86,10 +100,15 @@ export async function createServiceRequest(formData: FormData) {
     });
 
   if (insertError) {
-    console.error("เกิดข้อผิดพลาดในการบันทึกคำขอรับบริการ:", insertError.message);
+    console.error("Supabase Insert Error:", {
+      code: insertError.code,
+      message: insertError.message,
+      details: insertError.details,
+      hint: insertError.hint,
+    });
     const errorUrl = companionId
-      ? `/requests/new?companion_id=${companionId}&error=save`
-      : "/requests/new?error=save";
+      ? `/requests/new?companion_id=${companionId}&error=save&reason=${encodeURIComponent(insertError.message)}`
+      : `/requests/new?error=save&reason=${encodeURIComponent(insertError.message)}`;
     redirect(errorUrl);
   }
 

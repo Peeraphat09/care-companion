@@ -10,6 +10,7 @@ import {
   HeartHandshake,
   X,
 } from "lucide-react";
+import Image from "next/image";
 import { createClient } from "@/utils/supabase/server";
 
 // กำหนด Type ของพารามิเตอร์ URL ในหน้าค้นหาผู้ช่วย
@@ -269,13 +270,13 @@ export default async function CompanionsPage({
                     {/* ข้อมูลโปรไฟล์ด้านบน: รูป Avatar, ชื่อ, สถานะพร้อมรับงาน */}
                     <div className="flex items-start gap-4">
                       {avatarUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
+                        <Image
                           src={avatarUrl}
                           alt={`รูปโปรไฟล์ของ ${fullName}`}
                           className="h-14 w-14 shrink-0 rounded-full border border-stone-200 object-cover shadow-xs"
                           width={56}
                           height={56}
+                          unoptimized={avatarUrl.startsWith('http')}
                         />
                       ) : (
                         <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-teal-100 text-lg font-bold text-teal-800 shadow-xs">

@@ -14,6 +14,7 @@ import {
   Briefcase,
   AlertTriangle,
 } from "lucide-react";
+import Image from "next/image";
 import { createClient } from "@/utils/supabase/server";
 import { acceptServiceRequest, updateRequestStatus } from "./actions";
 
@@ -495,13 +496,13 @@ export default async function MyRequestsPage({
                       <div className="mt-4 border-t border-stone-100 pt-3">
                         <div className="flex items-center gap-3">
                           {customerProfile?.avatar_url ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
+                            <Image
                               src={customerProfile.avatar_url}
                               alt={customerName}
                               className="h-8 w-8 rounded-full border border-stone-200 object-cover"
                               width={32}
                               height={32}
+                              unoptimized={customerProfile.avatar_url.startsWith('http')}
                             />
                           ) : (
                             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-teal-100 text-xs font-bold text-teal-800">
@@ -523,8 +524,8 @@ export default async function MyRequestsPage({
                       </div>
                     </div>
 
-                    {/* ปุ่มสำหรับกด "ตอบรับงาน (Accept)" */}
-                    <div className="mt-5 pt-3 border-t border-stone-100">
+                    {/* ปุ่มสำหรับกด "ตอบรับงาน (Accept)" หรือ "ปฏิเสธงาน (Reject)" */}
+                    <div className="mt-5 pt-3 border-t border-stone-100 flex gap-3">
                       <form action={acceptServiceRequest} className="w-full">
                         <input type="hidden" name="request_id" value={request.id} />
                         <button
@@ -535,6 +536,19 @@ export default async function MyRequestsPage({
                           <span>ตอบรับงานนี้ (Accept Request)</span>
                         </button>
                       </form>
+                      {isDirectRequest && (
+                        <form action={updateRequestStatus} className="w-full">
+                          <input type="hidden" name="request_id" value={request.id} />
+                          <input type="hidden" name="status" value="cancelled" />
+                          <button
+                            type="submit"
+                            className="flex w-full items-center justify-center gap-2 rounded-xl border border-red-200 bg-white px-4 py-2.5 text-sm font-semibold text-red-600 shadow-xs transition hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-600"
+                          >
+                            <XCircle className="h-4 w-4" aria-hidden="true" />
+                            <span>ปฏิเสธงาน (Reject)</span>
+                          </button>
+                        </form>
+                      )}
                     </div>
                   </article>
                 );
@@ -631,13 +645,13 @@ export default async function MyRequestsPage({
                       <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-stone-100 pt-3 text-xs sm:text-sm">
                         <div className="flex items-center gap-2.5">
                           {customerProfile?.avatar_url ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
+                            <Image
                               src={customerProfile.avatar_url}
                               alt={customerName}
                               className="h-8 w-8 rounded-full border border-stone-200 object-cover"
                               width={32}
                               height={32}
+                              unoptimized={customerProfile.avatar_url.startsWith('http')}
                             />
                           ) : (
                             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-teal-100 text-xs font-bold text-teal-800">

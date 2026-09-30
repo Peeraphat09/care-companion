@@ -41,7 +41,7 @@ export async function acceptServiceRequest(formData: FormData) {
   // ดึงข้อมูลคำขอปัจจุบันเพื่อตรวจสอบสถานะก่อนรับงาน
   const { data: request, error: fetchError } = await supabase
     .from("service_requests")
-    .select("id, customer_id, companion_id, status")
+    .select("id, customer_id, companion_id, status, appointment_date, duration_hours")
     .eq("id", requestId)
     .single();
 
@@ -60,14 +60,35 @@ export async function acceptServiceRequest(formData: FormData) {
     redirect("/my-requests?error=already_taken");
   }
 
-  // อัปเดตคำขอ: บันทึก companion_id และเปลี่ยนสถานะเป็น 'accepted'
+  // ป้องกันการรับงานซ้อนทับกัน (Scheduling Conflicts)
+  const appointmentStart = new Date(request.appointment_date);
+  const appointmentEnd = new Date(appointmentStart.getTime() + request.duration_hours * 3600000);
+
+  const { data: activeJobs } = await supabase
+    .from("service_requests")
+    .select("appointment_date, duration_hours")
+    .eq("companion_id", user.id)
+    .in("status", ["accepted", "in_progress"]);
+    
+  if (activeJobs) {
+    for (const job of activeJobs) {
+      const jobStart = new Date(job.appointment_date);
+      const jobEnd = new Date(jobStart.getTime() + job.duration_hours * 3600000);
+      if (appointmentStart < jobEnd && jobStart < appointmentEnd) {
+        redirect("/my-requests?error=schedule_conflict");
+      }
+    }
+  }
+
+  // อัปเดตคำขอ: บันทึก companion_id และเปลี่ยนสถานะเป็น 'accepted' พร้อมป้องกัน Race condition
   const { error: updateError } = await supabase
     .from("service_requests")
     .update({
       companion_id: user.id,
       status: "accepted",
     })
-    .eq("id", requestId);
+    .eq("id", requestId)
+    .eq("status", "pending");
 
   if (updateError) {
     console.error("เกิดข้อผิดพลาดในการตอบรับงาน:", updateError.message);
@@ -135,15 +156,20 @@ export async function updateRequestStatus(formData: FormData) {
     if (!isCustomer && !isAssignedCompanion) {
       redirect("/my-requests?error=unauthorized");
     }
+    // ลูกค้าสามารถยกเลิกได้เฉพาะตอนที่สถานะยังเป็น pending หรือ accepted เท่านั้น
+    if (request.status !== "pending" && request.status !== "accepted") {
+      redirect("/my-requests?error=cannot_cancel");
+    }
   }
 
-  // อัปเดตสถานะคำขอรับบริการ
+  // อัปเดตสถานะคำขอรับบริการ พร้อมเช็กสถานะเดิมป้องกัน Race condition
   const { error: updateError } = await supabase
     .from("service_requests")
     .update({
       status: newStatus,
     })
-    .eq("id", requestId);
+    .eq("id", requestId)
+    .eq("status", request.status);
 
   if (updateError) {
     console.error("เกิดข้อผิดพลาดในการอัปเดตสถานะงาน:", updateError.message);

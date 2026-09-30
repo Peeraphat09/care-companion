@@ -13,30 +13,35 @@ import {
 } from "lucide-react";
 import { createClient } from "@/utils/supabase/server";
 import { createServiceRequest } from "./actions";
+import { SubmitButton } from "@/components/SubmitButton";
 
 // กำหนด Type ของพารามิเตอร์ URL ในหน้าสร้างคำขอ
 type NewRequestPageProps = {
   searchParams: Promise<{
     companion_id?: string;
     error?: string;
+    reason?: string;
   }>;
 };
 
 /**
  * ฟังก์ชันแปลงรหัสข้อผิดพลาดเป็นข้อความภาษาไทยที่เข้าใจง่าย
  */
-function getErrorMessage(error?: string) {
+function getErrorMessage(error?: string, reason?: string) {
   if (error === "incomplete") {
     return "กรุณากรอกข้อมูลที่จำเป็นให้ครบถ้วนทุกช่อง (ประเภทธุระ, ต้นทาง, ปลายทาง, วันเวลานัดหมาย และระยะเวลา)";
   }
   if (error === "invalid_date") {
     return "วันและเวลานัดหมายไม่ถูกต้อง กรุณาเลือกวันและเวลาใหม่อีกครั้ง";
   }
+  if (error === "past_date") {
+    return "ไม่สามารถจองวันและเวลาย้อนหลังได้ กรุณาเลือกเวลาในอนาคต";
+  }
   if (error === "invalid_duration") {
     return "ระยะเวลาโดยประมาณต้องเป็นตัวเลขจำนวนเต็มชั่วโมงที่มากกว่า 0";
   }
   if (error === "save") {
-    return "เกิดข้อผิดพลาดในการบันทึกคำขอรับบริการ กรุณาลองใหม่อีกครั้ง";
+    return `เกิดข้อผิดพลาดในการบันทึกคำขอรับบริการ: ${reason || "กรุณาลองใหม่อีกครั้ง"}`;
   }
   return null;
 }
@@ -65,8 +70,8 @@ export default async function NewRequestPage({
   }
 
   // ดึงค่า Query Parameters
-  const { companion_id, error } = await searchParams;
-  const errorMessage = getErrorMessage(error);
+  const { companion_id, error, reason } = await searchParams;
+  const errorMessage = getErrorMessage(error, reason);
 
   // หากมีการส่ง companion_id มา ให้ดึงข้อมูลของผู้ช่วยคนนั้นเพื่อแสดงสรุปบนฟอร์ม
   let selectedCompanion: {
@@ -353,14 +358,10 @@ export default async function NewRequestPage({
 
         {/* ปุ่มกดยืนยันการสร้างคำขอ */}
         <div className="pt-4 border-t border-stone-200">
-          <button
-            type="submit"
-            className="w-full rounded-xl bg-teal-600 px-5 py-3.5 text-base font-semibold text-white shadow-md transition hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-600 focus:ring-offset-2"
-          >
-            {selectedCompanion
-              ? `ยืนยันการส่งคำขอถึง ${selectedCompanion.full_name}`
-              : "ยืนยันและประกาศสร้างคำขอรับบริการ"}
-          </button>
+          <SubmitButton 
+            defaultText={selectedCompanion ? `ยืนยันการส่งคำขอถึง ${selectedCompanion.full_name}` : "ยืนยันและประกาศสร้างคำขอรับบริการ"}
+            loadingText="กำลังบันทึกข้อมูล..."
+          />
           <p className="mt-2 text-center text-xs text-stone-500">
             เมื่อส่งคำขอแล้ว คุณสามารถตรวจสอบสถานะได้ที่หน้ารายการคำขอของฉัน
           </p>
